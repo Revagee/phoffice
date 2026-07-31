@@ -1,0 +1,139 @@
+---
+description: Core architecture principles for Legal CRM — Clean Architecture, feature-first, SOLID
+alwaysApply: true
+---
+
+# Architecture Rules
+
+## Responsibilities
+
+- Enforce Clean Architecture with clear layer boundaries
+- Organize code feature-first, not by technical type alone
+- Keep business logic independent of frameworks (Next.js, Prisma, UI)
+- Define dependency direction: UI → Application → Domain ← Infrastructure
+
+## Layer Model
+
+```
+Presentation  →  app/, components/, features/*/ui/
+Application   →  features/*/actions/, features/*/hooks/, server/
+Domain        →  features/*/types/, features/*/schemas/, shared/domain/
+Infrastructure → repositories/, services/, prisma/, lib/
+```
+
+## Best Practices
+
+- **Feature-first**: Group by domain (`features/cases/`, `features/clients/`)
+- **Repository Pattern**: All DB access through repositories in `repositories/`
+- **Dependency Injection**: Pass dependencies via constructor/factory, not global singletons
+- **Server Components by default**: Client Components only when interactivity required
+- **Server Actions** for mutations; Route Handlers only for webhooks/external APIs
+- **Single Responsibility**: One reason to change per module
+- **DRY**: Extract shared logic to `shared/` or `lib/`
+- **KISS**: Prefer simple solutions over premature abstraction
+
+## Coding Standards
+
+- No business logic in React components — use hooks, services, or actions
+- No direct Prisma calls from components or Server Actions — use repositories
+- Cross-feature imports only through public API (`features/cases/index.ts`)
+- Shared types in `types/` or feature-local `types.ts`
+- Validate all external input with Zod at boundaries
+
+## Folder Structure
+
+```
+src/
+├── app/                    # Next.js App Router (routes, layouts, loading, error)
+├── features/               # Feature modules (cases, clients, billing, etc.)
+│   └── [feature]/
+│       ├── ui/             # Feature-specific components
+│       ├── actions/        # Server Actions
+│       ├── hooks/          # React Query hooks
+│       ├── schemas/        # Zod schemas
+│       ├── types/          # Feature types
+│       └── index.ts        # Public API barrel
+├── components/             # Shared UI (layout, navigation, data-display)
+├── shared/                 # Cross-cutting domain utilities
+├── hooks/                  # Global reusable hooks
+├── lib/                    # Framework config, utils, constants
+├── server/                 # Server-only utilities, auth, middleware helpers
+├── prisma/                 # Schema, migrations, seed
+├── types/                  # Global TypeScript types
+├── providers/              # React context providers
+├── services/               # External integrations (email, storage, AI)
+├── repositories/           # Data access layer
+├── actions/                # Global server actions (auth, settings)
+└── utils/                  # Pure utility functions
+```
+
+## Naming Convention
+
+| Artifact | Convention | Example |
+|----------|------------|---------|
+| Feature folder | kebab-case, singular | `features/cases/` |
+| Component | PascalCase | `CaseStatusBadge.tsx` |
+| Hook | camelCase, `use` prefix | `useCases.ts` |
+| Repository | PascalCase + Repository | `CaseRepository.ts` |
+| Service | PascalCase + Service | `InvoiceService.ts` |
+| Server Action | camelCase verb | `createCase.ts` |
+| Type/Interface | PascalCase | `CaseWithClient` |
+| Constant | SCREAMING_SNAKE | `MAX_FILE_SIZE` |
+
+## Performance Rules
+
+- Colocate data fetching with Server Components where possible
+- Use React Query for client-side cache with stale-while-revalidate
+- Paginate all list endpoints (default: 25 items)
+- Lazy-load heavy feature modules and charts
+- Avoid waterfall fetches — parallelize with `Promise.all`
+
+## Security Rules
+
+- Authenticate at middleware level; authorize at action/repository level
+- Never expose internal IDs in URLs without access checks
+- Audit log all destructive operations
+- Sanitize all user-generated content before render
+
+## Examples
+
+```typescript
+// ✅ GOOD — Repository abstracts Prisma
+// repositories/case.repository.ts
+export class CaseRepository {
+  constructor(private db: PrismaClient) {}
+  async findById(id: string, orgId: string) {
+    return this.db.case.findFirst({ where: { id, organizationId: orgId } });
+  }
+}
+
+// ✅ GOOD — Server Action delegates to service
+// features/cases/actions/create-case.ts
+export async function createCase(input: CreateCaseInput) {
+  const session = await requireAuth();
+  const parsed = createCaseSchema.parse(input);
+  return caseService.create(parsed, session.userId);
+}
+
+// ❌ BAD — Prisma in component
+const cases = await prisma.case.findMany(); // inside a .tsx file
+```
+
+## Things to Avoid
+
+- God components (>300 lines)
+- Circular dependencies between features
+- Importing from `@/features/x/internal/...` — use public barrel only
+- Mixing client and server code in same file
+- Global mutable state outside React Query / URL state
+- Anemic domain — put validation rules in schemas/services, not scattered in UI
+
+## Checklist Before Finishing Any Task
+
+- [ ] Code lives in the correct layer (UI vs application vs infrastructure)
+- [ ] Feature has a public `index.ts` if consumed externally
+- [ ] No direct DB access outside repositories
+- [ ] Input validated with Zod at entry points
+- [ ] Server/Client boundary respected (`"use client"` only when needed)
+- [ ] No duplicate logic — checked `shared/` and existing features first
+- [ ] Types exported and reused, not duplicated

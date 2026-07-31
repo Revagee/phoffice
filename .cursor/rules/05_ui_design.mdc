@@ -1,0 +1,116 @@
+---
+description: UI/UX design system — Linear, Stripe, Attio-inspired premium SaaS aesthetics
+globs: src/components/**/*,src/features/**/ui/**/*
+alwaysApply: false
+---
+
+# UI Design Rules
+
+## Responsibilities
+
+- Define visual language and interaction patterns for Legal CRM
+- Ensure consistent, premium SaaS appearance across all screens
+- Enforce accessibility (WCAG AA), dark mode first, responsive design
+- Standardize empty states, skeletons, animations, keyboard shortcuts
+
+## Design Inspiration
+
+| Reference | Adopt |
+|-----------|-------|
+| **Linear** | Keyboard-first navigation, command palette, subtle animations |
+| **Stripe** | Clean data tables, status badges, financial clarity |
+| **Attio** | CRM record layouts, relationship views, activity feeds |
+| **Notion** | Block-style notes, inline editing, collapsible sections |
+| **Vercel** | Dark mode palette, typography hierarchy, minimal chrome |
+
+## Best Practices
+
+- **Dark mode first** — design in dark, verify light mode
+- **8px spacing grid** — Tailwind spacing scale (2, 4, 6, 8, 12, 16, 24, 32)
+- **Typography**: Inter or Geist Sans; mono for case numbers, IDs
+- **Color semantics**: status colors consistent app-wide (see tailwind config)
+- **Progressive disclosure** — show essentials, reveal details on demand
+- **Command palette** (Cmd+K) for power users
+- **Keyboard shortcuts** documented in help modal
+- **Micro-interactions** via Framer Motion (150–300ms, ease-out)
+
+## Coding Standards
+
+- Every list view: skeleton loader + empty state + error state
+- Forms: inline validation, clear error messages, disabled submit while pending
+- Tables: sortable columns, row actions menu, bulk select
+- Detail pages: tabbed sections (Overview, Documents, Tasks, Activity)
+- Toasts for success/error feedback (sonner)
+- Modals for destructive confirmations only
+
+## Folder Structure
+
+```
+src/components/
+├── layout/         # AppShell, Sidebar, PageHeader, CommandPalette
+├── data-display/   # DataTable, StatCard, Timeline, StatusBadge
+├── feedback/       # EmptyState, Skeleton*, ErrorFallback
+└── forms/          # SearchInput, DateRangePicker, FileUpload
+
+src/features/*/ui/  # Feature-specific views and widgets
+```
+
+## Naming Convention
+
+| Element | Pattern |
+|---------|---------|
+| Page view | *View or *Page | `CasesListView` |
+| Widget | *Card, *Panel | `CaseSummaryCard` |
+| Skeleton | *Skeleton | `CaseListSkeleton` |
+| Empty state | Empty* | `EmptyCases` |
+| Modal/Dialog | *Dialog | `DeleteCaseDialog` |
+
+## Performance Rules
+
+- Skeleton loaders match final layout dimensions (no layout shift)
+- Animate only `transform` and `opacity` (GPU-accelerated)
+- Lazy-load charts and rich text editors
+- Reduce motion: respect `prefers-reduced-motion`
+
+## Security Rules
+
+- Mask sensitive data (SSN, account numbers) in UI by default
+- Confirm destructive actions with typed confirmation for critical deletes
+
+## Examples
+
+```tsx
+// ✅ GOOD — Complete state trinity
+export function CasesPage() {
+  const { data, isLoading, error } = useCases(filters);
+  if (isLoading) return <CasesListSkeleton />;
+  if (error) return <ErrorFallback error={error} retry={refetch} />;
+  if (!data?.length) return <EmptyCases onCreate={openCreate} />;
+  return <CasesList cases={data} />;
+}
+
+// ✅ GOOD — Accessible status badge
+<Badge variant={statusVariant[case.status]} aria-label={`Status: ${case.status}`}>
+  {statusLabel[case.status]}
+</Badge>
+```
+
+## Things to Avoid
+
+- Inconsistent spacing/padding across pages
+- Raw HTML tables without DataTable component
+- Flash of unstyled content (missing skeletons)
+- Color-only status indicators (always pair with text/icon)
+- Blocking modals for non-critical flows
+- Generic "No data" without action CTA
+
+## Checklist Before Finishing Any Task
+
+- [ ] Dark mode looks correct
+- [ ] Responsive at sm, md, lg, xl breakpoints
+- [ ] Loading skeleton implemented
+- [ ] Empty state with helpful CTA
+- [ ] Error state with retry option
+- [ ] WCAG AA contrast ratios met
+- [ ] Keyboard navigable (Tab, Enter, Escape)
+- [ ] Animations respect reduced-motion preference

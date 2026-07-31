@@ -1,0 +1,90 @@
+---
+description: shadcn/ui component standards — Radix primitives, composition, customization
+globs: src/components/ui/**/*
+alwaysApply: false
+---
+
+# shadcn/ui Rules
+
+## Responsibilities
+
+- Standardize usage of shadcn/ui components as design system foundation
+- Define when to use primitives vs compose custom components
+- Keep shadcn components customizable via CSS variables, not forked unnecessarily
+
+## Best Practices
+
+- Install components via CLI: `npx shadcn@latest add [component]`
+- Components live in `src/components/ui/` — treat as owned code, not node_modules
+- Compose shadcn primitives into domain components in `components/` or `features/*/ui/`
+- Use Radix UI accessibility built into shadcn components
+- Extend variants via `cva` (class-variance-authority) in component file
+- Form integration: shadcn Form + react-hook-form + Zod resolver
+
+## Coding Standards
+
+- Never modify shadcn component APIs without team agreement
+- Wrap repeated patterns: `<FormField>` + `<Input>` → `<TextField>`
+- Dialog for confirmations; Sheet for side panels/filters on mobile
+- DropdownMenu for row actions; ContextMenu for power users
+- DataTable built on `@tanstack/react-table` + shadcn Table
+
+## Folder Structure
+
+```
+src/components/ui/          # shadcn primitives (button, input, dialog, etc.)
+src/components/forms/       # Composed form fields
+src/components/data-display/ # DataTable, etc.
+```
+
+## Naming Convention
+
+- shadcn files: lowercase kebab-case (`dropdown-menu.tsx`)
+- Composed components: PascalCase in parent folders
+- Variants: semantic names (`default`, `destructive`, `outline`, `ghost`)
+
+## Performance Rules
+
+- Lazy-load Dialog/Sheet content when heavy
+- Virtualize large Select option lists
+
+## Security Rules
+
+- AlertDialog required for irreversible actions (delete case, void invoice)
+
+## Examples
+
+```tsx
+// ✅ GOOD — Form with Zod + shadcn
+<Form {...form}>
+  <FormField control={form.control} name="title" render={({ field }) => (
+    <FormItem>
+      <FormLabel>Case Title</FormLabel>
+      <FormControl><Input {...field} /></FormControl>
+      <FormMessage />
+    </FormItem>
+  )} />
+</Form>
+
+// ✅ GOOD — Destructive confirmation
+<AlertDialog>
+  <AlertDialogAction onClick={handleDelete} className="bg-destructive">
+    Delete Case
+  </AlertDialogAction>
+</AlertDialog>
+```
+
+## Things to Avoid
+
+- Building custom modal/select when shadcn component exists
+- Removing Radix accessibility attributes
+- Inline styles overriding shadcn variants inconsistently
+- Importing from `@radix-ui/*` directly in feature code (use shadcn wrapper)
+
+## Checklist Before Finishing Any Task
+
+- [ ] Using shadcn primitive where applicable
+- [ ] Form fields have labels and error messages
+- [ ] Destructive actions use AlertDialog
+- [ ] Component variants use cva consistently
+- [ ] Accessible (Radix handles most — verify focus trap in modals)

@@ -1,0 +1,116 @@
+---
+description: API and Server Actions conventions — validation, errors, pagination, responses
+globs: src/actions/**/*,src/features/**/actions/**/*,src/app/api/**/*
+alwaysApply: false
+---
+
+# API Rules
+
+## Responsibilities
+
+- Define Server Actions as primary mutation/query API for internal use
+- Standardize Route Handlers for external integrations only
+- Enforce consistent error handling, validation, and response shapes
+
+## Best Practices
+
+- **Server Actions first** — `features/[feature]/actions/*.ts` with `"use server"`
+- **Route Handlers** only for: webhooks, OAuth callbacks, file streaming, third-party APIs
+- **Zod validation** at every entry point
+- **Typed responses** — success/error discriminated union
+- **Pagination** standard: `{ data, meta: { page, pageSize, total, hasMore } }`
+- **Idempotency** for payment webhooks via idempotency keys
+- Revalidate paths/tags after mutations
+
+## Coding Standards
+
+```typescript
+// Standard action result type
+type ActionResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string; code?: string };
+
+// Standard action structure
+'use server';
+export async function createCase(input: CreateCaseInput): Promise<ActionResult<Case>> {
+  try {
+    const session = await requireAuth();
+    const parsed = createCaseSchema.parse(input);
+    const caseData = await caseService.create(parsed, session);
+    revalidatePath('/cases');
+    return { success: true, data: caseData };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { success: false, error: 'Invalid input', code: 'VALIDATION_ERROR' };
+    }
+    logger.error('createCase failed', { error });
+    return { success: false, error: 'Failed to create case' };
+  }
+}
+```
+
+## Folder Structure
+
+```
+src/features/[feature]/actions/   # Feature Server Actions
+src/actions/                      # Global actions (auth, profile)
+src/app/api/                      # Route Handlers (webhooks only)
+src/lib/api/                      # Response helpers, error codes
+```
+
+## Naming Convention
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Server Action file | kebab-case verb | `create-case.ts` |
+| Action function | camelCase verb | `createCase`, `updateCaseStatus` |
+| Route handler | REST noun path | `/api/webhooks/stripe` |
+| Query action | get* / list* | `getCases`, `listInvoices` |
+
+## Performance Rules
+
+- Batch related reads in single action when needed by one view
+- Cache tags for granular revalidation: `cases`, `case:${id}`
+- Rate limit public Route Handlers
+
+## Security Rules
+
+- `requireAuth()` + `requirePermission()` at start of every action
+- Validate organizationId ownership before update/delete
+- Never return stack traces to client
+- Webhook signature verification before processing
+- CSRF: rely on Server Actions; for Route Handlers use signed tokens
+
+## Examples
+
+```typescript
+// ✅ GOOD — Route Handler for webhook only
+// app/api/webhooks/stripe/route.ts
+export async function POST(req: Request) {
+  const body = await req.text();
+  const sig = req.headers.get('stripe-signature')!;
+  const event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+  await paymentService.handleWebhook(event);
+  return Response.json({ received: true });
+}
+
+// ❌ BAD — REST CRUD route for internal use
+// app/api/cases/route.ts  → use Server Action instead
+```
+
+## Things to Avoid
+
+- Exposing internal IDs without authorization checks
+- Generic catch-all error messages without logging
+- Returning Prisma models directly (map to DTOs)
+- API routes duplicating Server Action logic
+- Missing input validation
+
+## Checklist Before Finishing Any Task
+
+- [ ] Input validated with Zod schema
+- [ ] Auth and permission checks present
+- [ ] Returns typed ActionResult
+- [ ] Errors logged server-side
+- [ ] revalidatePath/Tag called after mutations
+- [ ] No sensitive data in error responses

@@ -1,0 +1,112 @@
+---
+description: Git workflow — branching, commits, PRs, code review standards
+alwaysApply: true
+---
+
+# Git Rules
+
+## Responsibilities
+
+- Define branching strategy, commit conventions, and PR workflow
+- Ensure clean, reviewable history and safe collaboration
+
+## Best Practices
+
+- **Trunk-based** with short-lived feature branches
+- **Conventional Commits** for all commit messages
+- **PR required** for merge to `main` and `develop`
+- **Squash merge** feature branches to keep history clean
+- **No direct commits** to `main`
+- **Linked issues** in PR description
+
+## Branch Strategy
+
+```
+main          → production releases
+develop       → integration/staging
+feat/*        → new features
+fix/*         → bug fixes
+chore/*       → tooling, deps, config
+docs/*        → documentation only
+```
+
+## Commit Message Format
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer: Closes #123]
+```
+
+**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
+
+**Examples**:
+- `feat(cases): add case timeline activity feed`
+- `fix(billing): correct tax calculation on invoices`
+- `chore(deps): upgrade prisma to 6.x`
+
+## Coding Standards
+
+- Commit atomic changes — one logical change per commit
+- Never commit `.env`, credentials, or `node_modules`
+- Run `lint` and `typecheck` before push
+- Keep PRs <400 lines when possible
+
+## Folder Structure
+
+```
+.github/
+├── PULL_REQUEST_TEMPLATE.md
+└── workflows/
+```
+
+## Naming Convention
+
+| Item | Pattern |
+|------|---------|
+| Feature branch | `feat/short-description` |
+| Fix branch | `fix/issue-description` |
+| PR title | Same as conventional commit |
+
+## Performance Rules
+
+- N/A
+
+## Security Rules
+
+- Never commit secrets — use `.env.example` with placeholders
+- Pre-commit hook scans for secrets (Phase 1 setup)
+- Review dependency changes carefully in PRs
+
+## Examples
+
+```bash
+# ✅ GOOD workflow
+git checkout -b feat/case-filters
+git commit -m "feat(cases): add status and priority filters"
+git push -u origin feat/case-filters
+# Open PR → review → squash merge
+
+# ❌ BAD
+git commit -m "fix stuff"
+git commit -m "WIP"  # on main
+```
+
+## Things to Avoid
+
+- Force push to shared branches
+- Large PRs mixing unrelated changes
+- Committing generated files unnecessarily
+- Merge commits on feature branches (rebase preferred locally)
+- `--no-verify` to skip hooks
+
+## Checklist Before Finishing Any Task
+
+- [ ] Branch named correctly (`feat/`, `fix/`, etc.)
+- [ ] Commits follow Conventional Commits
+- [ ] No secrets or `.env` in diff
+- [ ] PR has description, test plan, screenshots (UI)
+- [ ] CI passes before requesting review
+- [ ] Self-review completed

@@ -1,0 +1,118 @@
+---
+description: Testing standards — unit, integration, E2E, coverage for Legal CRM
+globs: **/*.{test,spec}.{ts,tsx},**/__tests__/**/*
+alwaysApply: false
+---
+
+# Testing Rules
+
+## Responsibilities
+
+- Define testing strategy, tools, and coverage expectations
+- Ensure critical business logic and auth paths are tested
+- Prevent regressions in billing, permissions, and data integrity
+
+## Best Practices
+
+- **Testing pyramid**: Many unit → fewer integration → critical E2E
+- **Vitest** for unit and integration tests
+- **React Testing Library** for component tests
+- **Playwright** for E2E critical paths
+- **MSW** for mocking external APIs in tests
+- Test repositories with test database (Docker PostgreSQL)
+- Colocate tests: `case.service.test.ts` next to `case.service.ts`
+- Or `__tests__/` folder within feature
+
+## Coding Standards
+
+```typescript
+// Unit test structure
+describe('CaseService', () => {
+  describe('create', () => {
+    it('creates case with valid input', async () => { ... });
+    it('rejects invalid clientId', async () => { ... });
+    it('requires cases:create permission', async () => { ... });
+  });
+});
+```
+
+- AAA pattern: Arrange, Act, Assert
+- One assertion focus per test (logical grouping OK)
+- Factory functions for test data in `tests/factories/`
+- Clean database between integration tests
+
+## Folder Structure
+
+```
+tests/
+├── factories/           # Test data builders
+├── helpers/             # Auth helpers, db setup
+├── e2e/                 # Playwright specs
+src/features/cases/
+├── services/case.service.ts
+└── services/case.service.test.ts
+```
+
+## Naming Convention
+
+| Type | Pattern |
+|------|---------|
+| Unit test file | `*.test.ts` |
+| E2E spec | `*.spec.ts` |
+| Test describe | Unit under test name |
+| Test case | `it('should ...')` descriptive behavior |
+
+## Performance Rules
+
+- Unit tests must run <5s total per feature
+- Parallelize Vitest workers
+- E2E: run critical path only in CI (login, create case, invoice)
+
+## Security Rules
+
+- Test permission denial paths explicitly
+- Test cross-tenant access returns 404/not found
+- Never use production credentials in tests
+
+## Coverage Targets
+
+| Layer | Target |
+|-------|--------|
+| Services/Repositories | 80%+ |
+| Server Actions | 70%+ |
+| Utils | 90%+ |
+| UI Components | 50%+ (critical paths) |
+| E2E | Auth, CRUD cases, billing flow |
+
+## Examples
+
+```typescript
+// ✅ GOOD — Test cross-tenant isolation
+it('returns null when case belongs to different org', async () => {
+  const result = await caseRepository.findById(caseId, otherOrgId);
+  expect(result).toBeNull();
+});
+
+// ✅ GOOD — Component test
+it('shows empty state when no cases', () => {
+  render(<CaseList cases={[]} isLoading={false} />);
+  expect(screen.getByText(/no cases/i)).toBeInTheDocument();
+});
+```
+
+## Things to Avoid
+
+- Testing implementation details (internal state)
+- Snapshot tests for entire pages ( brittle)
+- Skipping auth/permission tests
+- Flaky E2E without proper waits
+- Tests depending on execution order
+
+## Checklist Before Finishing Any Task
+
+- [ ] Unit tests for new business logic
+- [ ] Permission denial case tested
+- [ ] Edge cases covered (empty, invalid input)
+- [ ] Integration test if DB queries added
+- [ ] E2E updated if critical user flow changed
+- [ ] All tests pass locally

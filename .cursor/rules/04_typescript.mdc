@@ -1,0 +1,116 @@
+---
+description: TypeScript strict mode standards — types, generics, Zod integration
+globs: **/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Rules
+
+## Responsibilities
+
+- Enforce strict TypeScript configuration across the codebase
+- Define type patterns for domain models, API responses, and forms
+- Integrate Zod schemas as single source of truth for runtime + compile-time types
+- Eliminate `any`, unsafe casts, and duplicated type definitions
+
+## Best Practices
+
+- **`strict: true`** in tsconfig — no exceptions
+- **Zod infer types**: `type CreateCaseInput = z.infer<typeof createCaseSchema>`
+- **Prisma types** as base; extend with computed/joined types in feature `types/`
+- **Discriminated unions** for state machines (case status, invoice status)
+- **Branded types** for IDs when mixing string IDs: `type CaseId = string & { readonly brand: unique symbol }`
+- **const assertions** for literal unions and config objects
+- **satisfies** operator for type-safe object literals
+
+## Coding Standards
+
+```json
+// tsconfig.json requirements
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+- Prefer `interface` for object shapes; `type` for unions/intersections/mapped types
+- Use `unknown` over `any`; narrow with type guards
+- Explicit return types on exported functions and repository methods
+- Never use `@ts-ignore` — use `@ts-expect-error` with comment explaining why
+- Enum alternatives: `as const` objects + union type
+
+## Folder Structure
+
+```
+src/types/              # Global shared types (pagination, API response wrappers)
+src/features/*/types/   # Feature-specific domain types
+src/features/*/schemas/ # Zod schemas (source of truth)
+```
+
+## Naming Convention
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Input DTO | *Input | `CreateCaseInput` |
+| Output DTO | *Response / *Dto | `CaseListResponse` |
+| Entity | Singular noun | `Case`, `Client` |
+| Enum-like | SCREAMING or PascalCase | `CaseStatus` |
+| Generic param | T, TData, TError | `ApiResponse<TData>` |
+| Props | *Props | `CaseCardProps` |
+
+## Performance Rules
+
+- Avoid deep recursive types that slow compilation
+- Use `import type` for type-only imports (enables tree-shaking)
+- Split large type files by domain
+
+## Security Rules
+
+- Type external API responses with Zod parse, not blind cast
+- Never trust `as SomeType` on user input — always validate first
+
+## Examples
+
+```typescript
+// ✅ GOOD — Zod schema + inferred type
+export const createCaseSchema = z.object({
+  title: z.string().min(1).max(200),
+  clientId: z.string().cuid(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
+  status: z.enum(['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'CLOSED']).default('OPEN'),
+});
+export type CreateCaseInput = z.infer<typeof createCaseSchema>;
+
+// ✅ GOOD — Discriminated union
+type AsyncState<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: string };
+
+// ❌ BAD
+const data = response as Case;           // unsafe
+function process(input: any) { ... }     // forbidden
+```
+
+## Things to Avoid
+
+- `any`, `// @ts-ignore`, double assertions (`as unknown as T`)
+- Duplicating Prisma model types manually
+- Optional chaining abuse masking null design flaws
+- Non-null assertion operator (`!`) without guard
+
+## Checklist Before Finishing Any Task
+
+- [ ] No `any` types introduced
+- [ ] External input validated with Zod before typing
+- [ ] Exported functions have explicit return types
+- [ ] Types derived from schemas/Prisma, not duplicated
+- [ ] `import type` used where applicable
+- [ ] Strict compiler options respected

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: legal_crm_db
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: legal_crm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Optional: Redis for caching and rate limiting (Milestone 6+)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: legal_crm_redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - '6379:6379'
+
+volumes:
+  postgres_data:

@@ -1,0 +1,119 @@
+---
+description: React patterns — Server/Client boundaries, hooks, composition, React Query
+globs: **/*.{tsx,jsx}
+alwaysApply: false
+---
+
+# React Rules
+
+## Responsibilities
+
+- Define component architecture and composition patterns
+- Enforce Server vs Client Component boundaries
+- Standardize React Query usage for client-side data
+- Ensure reusable, accessible component design
+
+## Best Practices
+
+- **Server Components default** — add `"use client"` only for hooks, events, browser APIs
+- **Composition over inheritance** — compound components for complex UI
+- **Colocate state** — lift only when siblings need shared state
+- **React Query** for client fetching, caching, optimistic updates
+- **Custom hooks** extract reusable logic; components stay presentational
+- **Error boundaries** wrap feature sections, not entire app
+
+## Coding Standards
+
+- One component per file (except tightly coupled sub-components)
+- Props interface named `[Component]Props`
+- Destructure props in function signature
+- Early return for loading/error/empty states
+- Memoize expensive computations with `useMemo`; callbacks with `useCallback` only when profiled necessary
+- Keys on lists must be stable IDs, never array index
+
+## Folder Structure
+
+```
+src/components/           # Shared, cross-feature UI
+├── ui/                   # shadcn primitives (auto-generated)
+├── layout/               # AppShell, Sidebar, Header
+├── data-display/         # DataTable, StatCard, Timeline
+├── feedback/             # EmptyState, ErrorFallback
+└── forms/                # FormField wrappers
+
+src/features/[feature]/ui/  # Feature-specific components
+src/hooks/                  # Global hooks (useDebounce, useMediaQuery)
+src/providers/              # QueryProvider, ThemeProvider
+```
+
+## Naming Convention
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Component file | PascalCase.tsx | `CaseList.tsx` |
+| Client Component | Same + `"use client"` top | `CaseFilters.tsx` |
+| Hook file | use*.ts | `useCases.ts` |
+| Provider | *Provider.tsx | `QueryProvider.tsx` |
+| Event handler | handle* | `handleSubmit` |
+| Boolean prop | is/has/can prefix | `isLoading`, `hasError` |
+
+## Performance Rules
+
+- Split Client Components to smallest interactive island
+- Virtualize lists >100 items (`@tanstack/react-virtual`)
+- Debounce search inputs (300ms default)
+- Avoid inline object/array literals in props to memoized children
+- Prefetch on hover for navigation links via React Query
+
+## Security Rules
+
+- Never use `dangerouslySetInnerHTML` without DOMPurify
+- Sanitize user content before display
+- No secrets or tokens in Client Components
+
+## Examples
+
+```tsx
+// ✅ GOOD — React Query hook
+// features/cases/hooks/use-cases.ts
+export function useCases(filters: CaseFilters) {
+  return useQuery({
+    queryKey: ['cases', filters],
+    queryFn: () => getCases(filters),
+    staleTime: 30_000,
+  });
+}
+
+// ✅ GOOD — Presentational component with early returns
+export function CaseList({ cases, isLoading }: CaseListProps) {
+  if (isLoading) return <CaseListSkeleton />;
+  if (!cases.length) return <EmptyState title="No cases" />;
+  return (
+    <ul role="list">
+      {cases.map((c) => <CaseListItem key={c.id} case={c} />)}
+    </ul>
+  );
+}
+
+// ❌ BAD — Business logic in component
+function CaseForm() {
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0); // move to util/service
+}
+```
+
+## Things to Avoid
+
+- `useEffect` for data fetching (use Server Components or React Query)
+- Prop drilling >2 levels (use composition or context)
+- Giant components mixing fetch, form, table, modal
+- Default exports for hooks/utilities (named exports preferred)
+- Suppressing React key warnings
+
+## Checklist Before Finishing Any Task
+
+- [ ] `"use client"` only where necessary
+- [ ] Loading, empty, and error states implemented
+- [ ] Props fully typed with interface
+- [ ] List items have stable keys
+- [ ] Accessible markup (roles, labels, focus)
+- [ ] No business logic that belongs in services/actions

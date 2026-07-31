@@ -1,0 +1,119 @@
+---
+description: Prisma ORM conventions — schema design, migrations, client usage
+globs: src/prisma/**/*
+alwaysApply: false
+---
+
+# Prisma Rules
+
+## Responsibilities
+
+- Define schema design standards and migration workflow
+- Enforce repository pattern — Prisma Client never used directly in UI/actions
+- Manage relations, indexes, soft deletes, and audit fields
+
+## Best Practices
+
+- **Single schema file**: `src/prisma/schema.prisma`
+- **cuid()** for all primary keys
+- **Timestamps** on every model: `createdAt`, `updatedAt`
+- **Soft delete** where legally required: `deletedAt DateTime?`
+- **Indexes** on foreign keys and frequently filtered columns
+- **Enums** for status fields (CaseStatus, InvoiceStatus, etc.)
+- **Json** fields for flexible metadata only — prefer typed columns
+- Migrations: one logical change per migration, descriptive names
+- Seed script for dev roles, permissions, sample data
+
+## Coding Standards
+
+```prisma
+model Case {
+  id             String     @id @default(cuid())
+  organizationId String
+  title          String
+  status         CaseStatus @default(OPEN)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([clientId])
+  @@map("cases")
+}
+```
+
+- Use `@@map` for snake_case table names in PostgreSQL
+- Use `@map` for snake_case column names when needed
+- Cascade rules explicit: `onDelete: Restrict` for financial records
+- `$transaction` for multi-table writes
+
+## Folder Structure
+
+```
+src/prisma/
+├── schema.prisma
+├── migrations/
+└── seed.ts
+src/lib/prisma.ts          # Singleton PrismaClient
+src/repositories/          # All DB access
+```
+
+## Naming Convention
+
+| Element | Convention |
+|---------|------------|
+| Model | PascalCase singular | `Case`, `InvoiceLineItem` |
+| Field | camelCase | `caseNumber`, `dueDate` |
+| Enum | PascalCase | `CaseStatus` |
+| Enum value | SCREAMING_SNAKE | `IN_PROGRESS` |
+| Relation field | camelCase singular/plural | `client`, `hearings` |
+| Migration | timestamp_descriptive | `20260101_add_case_tags` |
+
+## Performance Rules
+
+- `select` only needed fields in list queries
+- Use `include` sparingly — prefer explicit joins via repository methods
+- Cursor-based pagination for large tables
+- Connection pooling via PgBouncer in production
+
+## Security Rules
+
+- Row-level filtering by `organizationId` in every repository query
+- Never expose password hashes in select statements
+- Audit sensitive field changes via AuditLog model
+
+## Examples
+
+```typescript
+// ✅ GOOD — Singleton client
+// lib/prisma.ts
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// ✅ GOOD — Transaction
+await prisma.$transaction(async (tx) => {
+  const invoice = await tx.invoice.create({ data: invoiceData });
+  await tx.invoiceLineItem.createMany({ data: lineItems.map(li => ({ ...li, invoiceId: invoice.id })) });
+});
+```
+
+## Things to Avoid
+
+- `prisma db push` in production — use migrations
+- N+1 queries from uncontrolled `include` nesting
+- Missing indexes on filter/sort columns
+- Storing files in DB — store URLs/metadata only
+- Raw SQL unless performance-critical and documented
+
+## Checklist Before Finishing Any Task
+
+- [ ] Model has createdAt/updatedAt
+- [ ] Foreign keys indexed
+- [ ] organizationId scoping on tenant data
+- [ ] Migration created and named descriptively
+- [ ] Access only through repository layer
+- [ ] Cascade delete rules reviewed for data integrity

@@ -1,0 +1,105 @@
+---
+description: Deployment and DevOps — Vercel, CI/CD, environments, monitoring
+globs: .github/**/*,Dockerfile,docker-compose.yml,vercel.json
+alwaysApply: false
+---
+
+# Deployment Rules
+
+## Responsibilities
+
+- Define deployment pipeline, environments, and infrastructure
+- Ensure reliable, secure production deployments
+- Configure monitoring, logging, and backup strategies
+
+## Best Practices
+
+- **Hosting**: Vercel for Next.js app
+- **Database**: Neon or Supabase PostgreSQL (production)
+- **Storage**: AWS S3 / Cloudflare R2 for documents
+- **CI/CD**: GitHub Actions — lint, typecheck, test, deploy
+- **Environments**: development → staging → production
+- **Preview deployments** on every PR
+- **Database migrations** run in CI deploy step before app start
+- **Secrets** in Vercel/GitHub Secrets, never in repo
+
+## Coding Standards
+
+```yaml
+# .github/workflows/ci.yml stages
+# 1. lint (eslint, prettier)
+# 2. typecheck (tsc --noEmit)
+# 3. test (vitest)
+# 4. build (next build)
+# 5. deploy (vercel --prod on main only)
+```
+
+## Folder Structure
+
+```
+.github/workflows/
+├── ci.yml
+└── deploy.yml
+docker-compose.yml          # Local PostgreSQL + Redis (optional)
+.env.example                # Template for required env vars
+vercel.json                 # Vercel config (if needed)
+```
+
+## Environment Variables
+
+| Variable | Scope | Required |
+|----------|-------|----------|
+| DATABASE_URL | Server | Yes |
+| AUTH_SECRET | Server | Yes |
+| NEXTAUTH_URL | Server | Yes |
+| S3_BUCKET, S3_ACCESS_KEY | Server | Yes (M3+) |
+| OPENAI_API_KEY | Server | Optional (AI) |
+| STRIPE_SECRET_KEY | Server | Optional (M6) |
+
+## Naming Convention
+
+- Branches: `main` (production), `develop` (staging)
+- Feature branches: `feat/case-timeline`, `fix/invoice-calc`
+- Git tags for releases: `v1.0.0`
+
+## Performance Rules
+
+- Enable Vercel Edge for static assets
+- Connection pooling: Prisma Data Proxy or PgBouncer
+- CDN for document downloads via presigned URLs
+
+## Security Rules
+
+- HTTPS only in production
+- Security headers in `next.config.ts`
+- Dependabot for dependency updates
+- Production DB access restricted to CI migration runner
+- Regular automated backups (daily, 30-day retention)
+
+## Examples
+
+```typescript
+// next.config.ts security headers
+const securityHeaders = [
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+];
+```
+
+## Things to Avoid
+
+- Manual production database changes
+- Deploying without passing CI
+- Shared credentials across environments
+- Running `prisma db push` in production
+- Missing rollback plan for migrations
+
+## Checklist Before Finishing Any Task
+
+- [ ] Works in local Docker/dev environment
+- [ ] New env vars documented in `.env.example`
+- [ ] Migration tested locally before deploy
+- [ ] No breaking changes without migration path
+- [ ] CI pipeline passes
+- [ ] Preview deployment verified for UI changes

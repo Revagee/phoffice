@@ -1,0 +1,762 @@
+// Legal CRM — Database Schema
+// PostgreSQL via Prisma ORM
+// See Database.md for ERD and entity descriptions
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ORGANIZATION & AUTH
+// =============================================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  timezone  String   @default("UTC")
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  roles           Role[]
+  clients         Client[]
+  cases           Case[]
+  invoices        Invoice[]
+  tags            Tag[]
+  settings        Setting[]
+  calendarEvents  CalendarEvent[]
+  auditLogs       AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  organizationId String
+  email          String
+  passwordHash   String?
+  firstName      String
+  lastName       String
+  avatarUrl      String?
+  phone          String?
+  status         UserStatus @default(ACTIVE)
+  roleId         String
+  lastLoginAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  assignedCases     Case[]           @relation("CaseAssignee")
+  createdCases      Case[]           @relation("CaseCreator")
+  assignedClients   Client[]         @relation("ClientAssignee")
+  createdClients    Client[]         @relation("ClientCreator")
+  assignedTasks     Task[]           @relation("TaskAssignee")
+  createdTasks      Task[]           @relation("TaskCreator")
+  uploadedDocuments Document[]       @relation("DocumentUploader")
+  createdNotes      Note[]           @relation("NoteCreator")
+  createdInvoices   Invoice[]        @relation("InvoiceCreator")
+  recordedPayments  Payment[]        @relation("PaymentRecorder")
+  createdExpenses   Expense[]        @relation("ExpenseCreator")
+  activities        Activity[]
+  calendarEvents    CalendarEvent[]  @relation("EventAssignee")
+  createdEvents     CalendarEvent[]  @relation("EventCreator")
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  updatedSettings   Setting[]        @relation("SettingUpdater")
+  createdHearings   Hearing[]        @relation("HearingCreator")
+  sessions          Session[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  users        User[]
+  permissions  RolePermission[]
+
+  @@unique([organizationId, slug])
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  name        String @unique // e.g. cases:read
+  resource    String // e.g. cases
+  action      String // e.g. read
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// =============================================================================
+// CLIENTS
+// =============================================================================
+
+model Client {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           ClientType   @default(INDIVIDUAL)
+  firstName      String?
+  lastName       String?
+  companyName    String?
+  displayName    String
+  email          String?
+  phone          String?
+  address        Json?        // { street, city, state, zip, country }
+  taxId          String?
+  status         ClientStatus @default(ACTIVE)
+  assignedToId   String?
+  createdById    String
+  notes          String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignedTo   User?        @relation("ClientAssignee", fields: [assignedToId], references: [id])
+  createdBy    User         @relation("ClientCreator", fields: [createdById], references: [id])
+
+  cases          Case[]
+  documents      Document[]
+  tasks          Task[]
+  invoices       Invoice[]
+  payments       Payment[]
+  expenses       Expense[]
+  notesRecords   Note[]
+  calendarEvents CalendarEvent[]
+  tagAssignments TagAssignment[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, displayName])
+  @@index([assignedToId])
+  @@map("clients")
+}
+
+enum ClientType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PROSPECT
+  ARCHIVED
+}
+
+// =============================================================================
+// CASES
+// =============================================================================
+
+model Case {
+  id             String       @id @default(cuid())
+  organizationId String
+  caseNumber     String
+  title          String
+  description    String?      @db.Text
+  status         CaseStatus   @default(OPEN)
+  priority       CasePriority @default(MEDIUM)
+  practiceArea   String?
+  clientId       String
+  assignedToId   String?
+  courtName      String?
+  judgeName      String?
+  openedAt       DateTime     @default(now())
+  closedAt       DateTime?
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+  assignedTo   User?        @relation("CaseAssignee", fields: [assignedToId], references: [id])
+  createdBy    User         @relation("CaseCreator", fields: [createdById], references: [id])
+
+  hearings       Hearing[]
+  documents      Document[]
+  tasks          Task[]
+  invoices       Invoice[]
+  expenses       Expense[]
+  notesRecords   Note[]
+  calendarEvents CalendarEvent[]
+  tagAssignments TagAssignment[]
+
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+  @@index([clientId])
+  @@index([assignedToId])
+  @@map("cases")
+}
+
+enum CaseStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  PENDING
+  CLOSED
+  ARCHIVED
+}
+
+enum CasePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// =============================================================================
+// HEARINGS
+// =============================================================================
+
+model Hearing {
+  id          String        @id @default(cuid())
+  caseId      String
+  title       String
+  type        HearingType   @default(COURT)
+  scheduledAt DateTime
+  duration    Int           @default(60) // minutes
+  location    String?
+  courtRoom   String?
+  judgeName   String?
+  status      HearingStatus @default(SCHEDULED)
+  notes       String?       @db.Text
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  case      Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy User @relation("HearingCreator", fields: [createdById], references: [id])
+
+  @@index([caseId])
+  @@index([scheduledAt])
+  @@map("hearings")
+}
+
+enum HearingType {
+  COURT
+  DEPOSITION
+  MEDIATION
+  ARBITRATION
+  CONFERENCE
+  OTHER
+}
+
+enum HearingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+// =============================================================================
+// DOCUMENTS
+// =============================================================================
+
+model Document {
+  id           String           @id @default(cuid())
+  caseId       String?
+  clientId     String?
+  name         String
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String
+  category     DocumentCategory @default(OTHER)
+  version      Int              @default(1)
+  isPrivileged Boolean          @default(false)
+  uploadedById String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  deletedAt    DateTime?
+
+  case       Case?   @relation(fields: [caseId], references: [id])
+  client     Client? @relation(fields: [clientId], references: [id])
+  uploadedBy User    @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([caseId])
+  @@index([clientId])
+  @@index([category])
+  @@map("documents")
+}
+
+enum DocumentCategory {
+  PLEADING
+  CONTRACT
+  EVIDENCE
+  CORRESPONDENCE
+  FILING
+  DISCOVERY
+  MEMO
+  OTHER
+}
+
+// =============================================================================
+// TASKS
+// =============================================================================
+
+model Task {
+  id           String       @id @default(cuid())
+  caseId       String?
+  clientId     String?
+  title        String
+  description  String?      @db.Text
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  assignedToId String?
+  createdById  String
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  case       Case?   @relation(fields: [caseId], references: [id])
+  client     Client? @relation(fields: [clientId], references: [id])
+  assignedTo User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy  User    @relation("TaskCreator", fields: [createdById], references: [id])
+
+  @@index([caseId])
+  @@index([assignedToId, status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// =============================================================================
+// BILLING — INVOICES
+// =============================================================================
+
+model Invoice {
+  id            String        @id @default(cuid())
+  organizationId String
+  caseId        String?
+  clientId      String
+  invoiceNumber String
+  status        InvoiceStatus @default(DRAFT)
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime
+  subtotal      Decimal       @db.Decimal(12, 2)
+  taxRate       Decimal       @default(0) @db.Decimal(5, 4)
+  taxAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  total         Decimal       @db.Decimal(12, 2)
+  currency      String        @default("USD")
+  notes         String?       @db.Text
+  createdById   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  case         Case?        @relation(fields: [caseId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+  createdBy    User         @relation("InvoiceCreator", fields: [createdById], references: [id])
+
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, status])
+  @@index([clientId])
+  @@index([caseId])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Decimal @db.Decimal(10, 2)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  amount      Decimal @db.Decimal(12, 2)
+  sortOrder   Int     @default(0)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PARTIAL
+  PAID
+  OVERDUE
+  VOID
+  WRITTEN_OFF
+}
+
+// =============================================================================
+// BILLING — PAYMENTS
+// =============================================================================
+
+model Payment {
+  id            String        @id @default(cuid())
+  invoiceId     String?
+  clientId      String
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod @default(BANK_TRANSFER)
+  status        PaymentStatus @default(PENDING)
+  reference     String?
+  paidAt        DateTime?
+  recordedById  String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id])
+  client     Client   @relation(fields: [clientId], references: [id])
+  recordedBy User     @relation("PaymentRecorder", fields: [recordedById], references: [id])
+
+  @@index([invoiceId])
+  @@index([clientId])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  BANK_TRANSFER
+  CREDIT_CARD
+  STRIPE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// =============================================================================
+// BILLING — EXPENSES
+// =============================================================================
+
+model Expense {
+  id          String          @id @default(cuid())
+  caseId      String?
+  clientId    String?
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  category    ExpenseCategory @default(OTHER)
+  date        DateTime        @default(now())
+  receiptUrl  String?
+  billable    Boolean         @default(true)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  case      Case?   @relation(fields: [caseId], references: [id])
+  client    Client? @relation(fields: [clientId], references: [id])
+  createdBy User    @relation("ExpenseCreator", fields: [createdById], references: [id])
+
+  @@index([caseId])
+  @@index([clientId])
+  @@map("expenses")
+}
+
+enum ExpenseCategory {
+  FILING_FEE
+  TRAVEL
+  RESEARCH
+  EXPERT_WITNESS
+  COURT_COST
+  OFFICE
+  OTHER
+}
+
+// =============================================================================
+// NOTES
+// =============================================================================
+
+model Note {
+  id          String  @id @default(cuid())
+  caseId      String?
+  clientId    String?
+  content     String  @db.Text
+  isPinned    Boolean @default(false)
+  isPrivileged Boolean @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  case      Case?   @relation(fields: [caseId], references: [id])
+  client    Client? @relation(fields: [clientId], references: [id])
+  createdBy User    @relation("NoteCreator", fields: [createdById], references: [id])
+
+  @@index([caseId])
+  @@index([clientId])
+  @@map("notes")
+}
+
+// =============================================================================
+// ACTIVITIES (Timeline)
+// =============================================================================
+
+model Activity {
+  id          String         @id @default(cuid())
+  entityType  EntityType
+  entityId    String
+  action      ActivityAction
+  description String
+  metadata    Json?
+  userId      String
+  createdAt   DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+enum EntityType {
+  CLIENT
+  CASE
+  HEARING
+  DOCUMENT
+  TASK
+  INVOICE
+  PAYMENT
+  EXPENSE
+  NOTE
+  CALENDAR_EVENT
+  USER
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGED
+  ASSIGNED
+  COMMENTED
+  UPLOADED
+  DOWNLOADED
+  SENT
+  PAID
+  VIEWED
+}
+
+// =============================================================================
+// TAGS
+// =============================================================================
+
+model Tag {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String
+  color          String @default("#6366f1")
+  createdAt      DateTime @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  assignments    TagAssignment[]
+
+  @@unique([organizationId, name])
+  @@map("tags")
+}
+
+model TagAssignment {
+  id         String     @id @default(cuid())
+  tagId      String
+  entityType EntityType
+  entityId   String
+  caseId     String?
+  clientId   String?
+
+  tag    Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  case   Case?   @relation(fields: [caseId], references: [id])
+  client Client? @relation(fields: [clientId], references: [id])
+
+  @@unique([tagId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("tag_assignments")
+}
+
+// =============================================================================
+// CALENDAR
+// =============================================================================
+
+model CalendarEvent {
+  id              String   @id @default(cuid())
+  organizationId  String
+  title           String
+  description     String?  @db.Text
+  startAt         DateTime
+  endAt           DateTime
+  allDay          Boolean  @default(false)
+  location        String?
+  caseId          String?
+  clientId        String?
+  userId          String?
+  reminderMinutes Int?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  case         Case?        @relation(fields: [caseId], references: [id])
+  client       Client?      @relation(fields: [clientId], references: [id])
+  user         User?        @relation("EventAssignee", fields: [userId], references: [id])
+  createdBy    User         @relation("EventCreator", fields: [createdById], references: [id])
+
+  @@index([organizationId, startAt])
+  @@index([caseId])
+  @@index([userId])
+  @@map("calendar_events")
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String
+  message    String
+  entityType EntityType?
+  entityId   String?
+  isRead     Boolean          @default(false)
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TASK_DUE
+  HEARING_REMINDER
+  INVOICE_OVERDUE
+  PAYMENT_RECEIVED
+  CASE_ASSIGNED
+  DOCUMENT_UPLOADED
+  MENTION
+  SYSTEM
+}
+
+// =============================================================================
+// AUDIT LOGS
+// =============================================================================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  entityType     EntityType
+  entityId       String
+  action         String
+  oldValues      Json?
+  newValues      Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// SETTINGS
+// =============================================================================
+
+model Setting {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  value          Json
+  category       String   @default("general")
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  updatedBy    User?        @relation("SettingUpdater", fields: [updatedById], references: [id])
+
+  @@unique([organizationId, key])
+  @@map("settings")
+}

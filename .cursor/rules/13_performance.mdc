@@ -1,0 +1,99 @@
+---
+description: Performance optimization — caching, bundle size, Core Web Vitals, query efficiency
+globs: src/**/*
+alwaysApply: false
+---
+
+# Performance Rules
+
+## Responsibilities
+
+- Maintain fast page loads and interactions for daily lawyer workflows
+- Optimize database queries, bundle size, and rendering strategy
+- Monitor Core Web Vitals (LCP <2.5s, INP <200ms, CLS <0.1)
+
+## Best Practices
+
+- **Server Components** for static/slow-changing content
+- **React Query** staleTime: 30s lists, 5min reference data
+- **Pagination** default 25, max 100 per request
+- **Image optimization** via next/image with proper sizes
+- **Font optimization** via next/font (Geist/Inter)
+- **Bundle analysis** monthly via `@next/bundle-analyzer`
+- **Database**: select specific fields, avoid N+1, use indexes
+
+## Coding Standards
+
+```typescript
+// Parallel data fetching in Server Component
+const [cases, stats] = await Promise.all([
+  caseRepository.list(orgId, filters),
+  dashboardRepository.getStats(orgId),
+]);
+
+// React Query prefetch on hover
+const prefetchCase = (id: string) => {
+  queryClient.prefetchQuery({ queryKey: ['case', id], queryFn: () => getCase(id) });
+};
+```
+
+## Folder Structure
+
+```
+src/lib/cache/          # Cache tag constants, revalidation helpers
+src/components/feedback/ # Skeleton components matching layouts
+```
+
+## Naming Convention
+
+- Cache tags: `{entity}` or `{entity}:{id}` → `cases`, `case:clxyz`
+- Dynamic import files: `[feature]-chart.tsx` lazy loaded
+
+## Performance Rules (Detailed)
+
+| Area | Rule |
+|------|------|
+| Lists | Virtualize >100 rows |
+| Search | Debounce 300ms, min 2 chars |
+| Files | Presigned URLs, CDN for documents |
+| Charts | Dynamic import, render on tab visible |
+| Animations | 60fps, transform/opacity only |
+| DB | Query <50ms p95 for list endpoints |
+| Bundle | Client JS <200KB initial per route |
+
+## Security Rules
+
+- Rate limit expensive endpoints (search, export)
+- Paginate exports — never load full table to memory
+
+## Examples
+
+```tsx
+// ✅ GOOD — Dynamic import heavy component
+const RevenueChart = dynamic(() => import('./revenue-chart'), {
+  loading: () => <ChartSkeleton />,
+  ssr: false,
+});
+
+// ✅ GOOD — Select only needed fields
+prisma.case.findMany({
+  select: { id: true, title: true, status: true, client: { select: { name: true } } },
+});
+```
+
+## Things to Avoid
+
+- Fetching entire object graphs with deep includes
+- Client-side filtering of large datasets fetched once
+- Unoptimized images (raw `<img>` tags)
+- Synchronous file operations on request path
+- Missing Suspense boundaries causing full-page blocking
+
+## Checklist Before Finishing Any Task
+
+- [ ] List views paginated
+- [ ] Skeleton loaders prevent CLS
+- [ ] No N+1 query patterns introduced
+- [ ] Heavy components lazy-loaded
+- [ ] Images use next/image
+- [ ] Revalidation strategy defined for cached data

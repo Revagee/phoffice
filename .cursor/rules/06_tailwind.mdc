@@ -1,0 +1,109 @@
+---
+description: Tailwind CSS conventions — design tokens, utilities, responsive patterns
+globs: **/*.{tsx,css}
+alwaysApply: false
+---
+
+# Tailwind CSS Rules
+
+## Responsibilities
+
+- Define design tokens and utility usage patterns
+- Prevent arbitrary values and class soup
+- Standardize responsive, dark mode, and state variants
+
+## Best Practices
+
+- Use **CSS variables** in `globals.css` for theme tokens (shadcn pattern)
+- Extend theme in `tailwind.config.ts`, not inline arbitrary values
+- **`cn()` utility** (clsx + tailwind-merge) for conditional classes
+- Mobile-first responsive: base → `sm:` → `md:` → `lg:` → `xl:`
+- Dark mode via `class` strategy on `<html>` element
+- Group related utilities: layout → spacing → typography → color → effects
+
+## Coding Standards
+
+```tsx
+// Use cn() for conditional classes
+import { cn } from '@/lib/utils';
+
+<div className={cn(
+  'flex items-center gap-2 rounded-lg border px-4 py-2',
+  'bg-card text-card-foreground',
+  'hover:bg-accent transition-colors',
+  isActive && 'border-primary bg-primary/10',
+  className
+)} />
+```
+
+- Max ~10 utility classes per element; extract to component if exceeded
+- Use `@apply` sparingly in globals.css for base resets only
+- Semantic color tokens: `bg-background`, `text-foreground`, `border-border`
+- Never hardcode hex colors in components
+
+## Folder Structure
+
+```
+src/app/globals.css       # CSS variables, base layer
+tailwind.config.ts        # Theme extension
+src/lib/utils.ts          # cn() helper
+```
+
+## Naming Convention
+
+- Component wrapper classes: component name as comment, not BEM
+- Custom utilities in tailwind config: `legal-*` prefix if needed
+
+## Performance Rules
+
+- Purge unused classes (Tailwind JIT handles this)
+- Avoid animating layout properties (width, height, top, left)
+
+## Security Rules
+
+- N/A for styling layer
+
+## Theme Tokens (Dark First)
+
+```css
+/* globals.css — reference values */
+--background: 224 71% 4%;      /* near-black blue */
+--foreground: 213 31% 91%;
+--primary: 210 100% 52%;         /* accent blue */
+--muted: 223 47% 11%;
+--border: 216 34% 17%;
+--destructive: 0 63% 51%;
+--success: 142 76% 36%;
+--warning: 38 92% 50%;
+```
+
+## Examples
+
+```tsx
+// ✅ GOOD — Semantic tokens, responsive
+<main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+    Cases
+  </h1>
+</main>
+
+// ❌ BAD — Arbitrary values, hardcoded colors
+<div className="bg-[#1a1a2e] p-[13px] text-[#eee]">
+```
+
+## Things to Avoid
+
+- Inline `style={{}}` when Tailwind utilities exist
+- Duplicating responsive breakpoints inconsistently
+- `!important` overrides
+- Mixing Tailwind with CSS modules in same component
+- Long unreadable class strings — extract component
+
+## Checklist Before Finishing Any Task
+
+- [ ] Uses semantic color tokens, not raw colors
+- [ ] Dark mode variants tested
+- [ ] Responsive breakpoints applied
+- [ ] `cn()` used for conditional classes
+- [ ] No arbitrary values without justification
+- [ ] Focus/hover/active states styled

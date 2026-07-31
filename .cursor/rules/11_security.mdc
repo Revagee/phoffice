@@ -1,0 +1,105 @@
+---
+description: Security standards — auth, RBAC, data protection, OWASP for Legal CRM
+alwaysApply: true
+---
+
+# Security Rules
+
+## Responsibilities
+
+- Protect client-attorney privileged data and PII
+- Enforce authentication, authorization, and audit requirements
+- Prevent OWASP Top 10 vulnerabilities across all layers
+
+## Best Practices
+
+- **Auth**: NextAuth.js v5 (Auth.js) with secure session cookies
+- **RBAC**: Role → Permission matrix; check permissions, not roles, in code
+- **Multi-tenant isolation**: organizationId filter on every data query
+- **Password**: bcrypt/argon2, min 12 chars, breach check optional
+- **Session**: HttpOnly, Secure, SameSite=Lax cookies; rotation on privilege change
+- **2FA**: TOTP support (Phase 2 milestone)
+- **Rate limiting**: Login, password reset, API webhooks
+- **CSP headers** via Next.js config
+- **Dependency scanning** in CI (npm audit, Snyk)
+
+## Coding Standards
+
+```typescript
+// Permission check pattern
+await requirePermission(session, 'cases:update');
+
+// Organization scope check
+const caseRecord = await caseRepository.findById(id, session.organizationId);
+if (!caseRecord) throw new NotFoundError(); // don't reveal existence across tenants
+```
+
+- Hash API keys; store only prefix for display
+- Encrypt sensitive settings at rest (AES-256-GCM)
+- Log security events: failed login, permission denied, data export
+- Sanitize HTML with DOMPurify before render
+
+## Folder Structure
+
+```
+src/server/auth/          # Auth config, session helpers
+src/server/permissions/   # Permission definitions and checks
+src/middleware.ts         # Route protection
+```
+
+## Naming Convention
+
+- Permissions: `resource:action` → `cases:read`, `invoices:void`
+- Roles: PascalCase | `ADMIN`, `ATTORNEY`, `PARALEGAL`, `BILLING`, `CLIENT_PORTAL`
+
+## Performance Rules
+
+- Cache permission sets per session (invalidate on role change)
+- Avoid N+1 permission checks — load once per request
+
+## Security Rules (Detailed)
+
+| Threat | Mitigation |
+|--------|------------|
+| SQL Injection | Prisma parameterized queries only |
+| XSS | React escaping + DOMPurify for rich text |
+| CSRF | Server Actions + SameSite cookies |
+| IDOR | organizationId + ownership checks |
+| Broken Auth | Secure sessions, lockout after failed attempts |
+| Mass Assignment | Zod schemas whitelist fields |
+| File Upload | MIME validation, size limits, virus scan (Phase 2) |
+| Secrets | Environment variables, never in client bundle |
+
+## Examples
+
+```typescript
+// ✅ GOOD — Fail closed
+export async function requireAuth() {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/login');
+  return session;
+}
+
+// ❌ BAD — Trust client-provided organizationId
+async function getCases(organizationId: string) {
+  return prisma.case.findMany({ where: { organizationId } }); // from client input!
+}
+```
+
+## Things to Avoid
+
+- Storing passwords in plain text or reversible encryption
+- Client-side authorization checks without server validation
+- Exposing internal error details to users
+- `eval`, dynamic code execution
+- Logging PII or credentials
+
+## Checklist Before Finishing Any Task
+
+- [ ] Server-side auth check on all protected operations
+- [ ] Permission verified for action
+- [ ] organizationId from session, not client input
+- [ ] User input validated and sanitized
+- [ ] No secrets in code or client bundle
+- [ ] Audit log for sensitive operations
+- [ ] File uploads validated (if applicable)

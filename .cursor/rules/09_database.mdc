@@ -1,0 +1,116 @@
+---
+description: PostgreSQL database design — normalization, indexing, multi-tenancy, legal data
+globs: src/prisma/**/*,src/repositories/**/*
+alwaysApply: false
+---
+
+# Database Rules
+
+## Responsibilities
+
+- Define PostgreSQL schema design principles for legal CRM data
+- Enforce multi-tenant isolation, data integrity, and compliance-ready storage
+- Standardize indexing, constraints, and query patterns
+
+## Best Practices
+
+- **Multi-tenancy**: Every business entity scoped by `organizationId`
+- **Normalization**: 3NF default; denormalize only for proven read performance
+- **Immutable financial records**: Invoices/payments never hard-deleted
+- **Audit trail**: AuditLog for all create/update/delete on sensitive entities
+- **Full-text search**: PostgreSQL `tsvector` for case/client search (Phase 2+)
+- **UUIDs/cuids**: External-facing IDs; never sequential integers in URLs
+- **Timezone**: Store all timestamps UTC; display in user timezone
+
+## Entity Relationships (Core)
+
+```
+Organization ─┬─ User ─── Role ─── Permission
+                ├─ Client ─── Case ─┬─ Hearing
+                │                   ├─ Document
+                │                   ├─ Task
+                │                   ├─ Note
+                │                   └─ Invoice ─── Payment
+                ├─ CalendarEvent
+                ├─ Tag
+                └─ Setting
+Activity / AuditLog / Notification → polymorphic entity references
+```
+
+## Coding Standards
+
+- CHECK constraints for valid enum ranges where Prisma enums insufficient
+- UNIQUE constraints: `(organizationId, caseNumber)`, `(organizationId, invoiceNumber)`
+- NOT NULL on required business fields
+- Default values at DB level for status fields
+- JSON columns: validate structure in application layer with Zod
+
+## Folder Structure
+
+```
+src/prisma/schema.prisma    # Source of truth
+src/repositories/           # Query encapsulation
+Database.md                 # ERD documentation
+```
+
+## Naming Convention
+
+| DB Object | Convention |
+|-----------|------------|
+| Table | snake_case plural | `cases`, `invoice_line_items` |
+| Column | snake_case | `case_number`, `due_date` |
+| Index | idx_{table}_{columns} | `idx_cases_org_status` |
+| FK | {table}_{column}_fkey | auto-generated OK |
+
+## Performance Rules
+
+- Composite indexes match query WHERE + ORDER BY patterns
+- Partial indexes for soft-deleted exclusion: `WHERE deleted_at IS NULL`
+- EXPLAIN ANALYZE for queries >100ms in development
+- Limit JOIN depth to 3 levels in list queries
+
+## Security Rules
+
+- Application-level RLS backup: always filter `organizationId`
+- Consider PostgreSQL RLS policies in production (Phase 3)
+- Encrypt PII at rest (cloud provider) — document numbers masked in UI
+- Backup retention per legal/compliance requirements (configurable)
+
+## Examples
+
+```sql
+-- Index pattern for tenant-scoped lists
+CREATE INDEX idx_cases_org_status ON cases (organization_id, status)
+  WHERE deleted_at IS NULL;
+
+-- Unique business key per tenant
+UNIQUE (organization_id, case_number)
+```
+
+```typescript
+// ✅ GOOD — Always scope by organization
+async findCases(orgId: string, filters: CaseFilters) {
+  return prisma.case.findMany({
+    where: { organizationId: orgId, deletedAt: null, ...filters },
+    orderBy: { updatedAt: 'desc' },
+    take: 25,
+  });
+}
+```
+
+## Things to Avoid
+
+- Storing calculated totals without reconciliation logic
+- Deleting cases with active invoices
+- Cross-tenant queries without org filter
+- Storing binary files in PostgreSQL
+- Missing foreign key constraints
+
+## Checklist Before Finishing Any Task
+
+- [ ] organizationId on all tenant-scoped tables
+- [ ] Appropriate indexes for new query patterns
+- [ ] Financial records use Restrict, not Cascade delete
+- [ ] Soft delete considered for recoverable entities
+- [ ] AuditLog entry for sensitive mutations
+- [ ] ERD in Database.md updated if schema changed

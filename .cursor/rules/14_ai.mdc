@@ -1,0 +1,116 @@
+---
+description: AI integration standards — LLM features, prompts, privacy for Legal CRM
+globs: src/services/ai/**/*,src/features/**/ai/**/*
+alwaysApply: false
+---
+
+# AI Rules
+
+## Responsibilities
+
+- Define safe, useful AI features for legal workflows
+- Protect client-attorney privilege and PII in AI interactions
+- Standardize prompt engineering, streaming, and error handling
+
+## Best Practices
+
+- **AI as assistant, not authority** — always label AI-generated content
+- **Human review required** for AI-drafted legal documents before sending
+- **No PII in prompts** without explicit user consent and redaction
+- **Streaming responses** for long-form generation (SSE or AI SDK)
+- **Vercel AI SDK** for unified provider interface
+- **Prompt templates** versioned in `services/ai/prompts/`
+- **Token limits** enforced; truncate context intelligently
+- **Audit log** all AI interactions with userId, feature, timestamp
+
+## Planned AI Features (Roadmap)
+
+| Feature | Phase | Description |
+|---------|-------|-------------|
+| Case summary | M4 | Summarize case notes and documents |
+| Document draft | M5 | Template-based document generation |
+| Deadline extraction | M5 | Parse documents for dates/deadlines |
+| Smart search | M4 | Natural language case/client search |
+| Email draft | M6 | Draft client communication |
+
+## Coding Standards
+
+```typescript
+// AI service pattern
+export class AiService {
+  async summarizeCase(caseId: string, userId: string): Promise<ActionResult<string>> {
+    await requirePermission(session, 'ai:use');
+    const context = await this.buildSanitizedContext(caseId); // strip PII
+    const result = await generateText({ model, prompt: SUMMARIZE_PROMPT, context });
+    await auditLog.create({ action: 'AI_SUMMARIZE', entityId: caseId, userId });
+    return { success: true, data: result.text };
+  }
+}
+```
+
+## Folder Structure
+
+```
+src/services/ai/
+├── ai.service.ts
+├── prompts/
+│   ├── summarize-case.ts
+│   └── draft-document.ts
+├── sanitizers/
+│   └── pii-redactor.ts
+└── types.ts
+src/features/ai/ui/          # AI feature UI components
+```
+
+## Naming Convention
+
+- Prompt files: `{action}-{entity}.ts` → `summarize-case.ts`
+- AI components: `Ai*` prefix → `AiSummaryPanel`
+- Feature flags: `AI_{FEATURE}_ENABLED`
+
+## Performance Rules
+
+- Cache AI summaries until source data changes (hash-based invalidation)
+- Stream responses >500 tokens
+- Timeout AI calls at 30s with graceful fallback
+- Queue long-running AI jobs (Phase 3)
+
+## Security Rules
+
+- **Never send privileged content to AI without firm policy consent**
+- Redact SSN, account numbers, addresses before API calls
+- AI API keys server-side only
+- Log prompts/responses encrypted, retention 90 days max
+- Allow firm admin to disable AI features entirely
+- Comply with bar association AI usage guidelines (disclaimer in UI)
+
+## Examples
+
+```tsx
+// ✅ GOOD — AI disclaimer UI
+<Alert variant="info">
+  <Sparkles className="h-4 w-4" />
+  AI-generated content requires attorney review before use.
+</Alert>
+
+// ❌ BAD — Auto-send AI draft to client without review step
+await sendEmail({ body: aiGeneratedDraft });
+```
+
+## Things to Avoid
+
+- Fully automated legal advice to clients
+- Training on client data without consent
+- Storing AI API keys in client bundle
+- Unbounded context windows (cost + privacy risk)
+- Presenting AI output as verified legal fact
+
+## Checklist Before Finishing Any Task
+
+- [ ] AI output labeled as AI-generated
+- [ ] PII sanitized before external API call
+- [ ] Permission check (`ai:use`) enforced
+- [ ] Audit log entry created
+- [ ] Human review step in UX flow
+- [ ] Feature flag for rollout control
+- [ ] Error/fallback UI when AI unavailable

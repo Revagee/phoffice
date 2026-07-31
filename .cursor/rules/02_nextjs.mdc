@@ -1,0 +1,131 @@
+---
+description: Next.js App Router conventions — routing, layouts, Server Components, metadata
+globs: src/app/**/*
+alwaysApply: false
+---
+
+# Next.js Rules
+
+## Responsibilities
+
+- Define App Router structure, layouts, and route conventions
+- Enforce Server Components by default
+- Standardize loading, error, and not-found UI patterns
+- Configure metadata, SEO, and route handlers
+
+## Best Practices
+
+- Use route groups `(auth)`, `(dashboard)` for layout organization without URL segments
+- Colocate `loading.tsx`, `error.tsx`, `not-found.tsx` with routes
+- Use `generateMetadata` for dynamic page titles
+- Parallel routes only when genuinely needed (e.g., modals)
+- Route Handlers (`app/api/`) only for webhooks, file uploads, third-party callbacks
+- Prefer Server Actions over API routes for internal mutations
+
+## Coding Standards
+
+- Page files export default async Server Components
+- Extract interactive parts to Client Components in same feature folder
+- Use `redirect()` and `notFound()` from `next/navigation` in Server Components
+- Dynamic segments: `[id]`, catch-all `[...slug]` with validation
+- Environment variables: `NEXT_PUBLIC_` prefix only for client-safe values
+
+## Folder Structure
+
+```
+src/app/
+├── (auth)/
+│   ├── login/page.tsx
+│   ├── register/page.tsx
+│   └── layout.tsx
+├── (dashboard)/
+│   ├── layout.tsx              # Sidebar + header shell
+│   ├── page.tsx                # Dashboard home
+│   ├── cases/
+│   │   ├── page.tsx
+│   │   ├── loading.tsx
+│   │   ├── [caseId]/
+│   │   │   ├── page.tsx
+│   │   │   └── edit/page.tsx
+│   │   └── new/page.tsx
+│   ├── clients/
+│   ├── calendar/
+│   ├── billing/
+│   └── settings/
+├── api/
+│   └── webhooks/
+│       └── stripe/route.ts
+├── layout.tsx                  # Root layout (providers, fonts)
+├── globals.css
+├── not-found.tsx
+└── error.tsx
+```
+
+## Naming Convention
+
+| File | Pattern |
+|------|---------|
+| Page | `page.tsx` |
+| Layout | `layout.tsx` |
+| Loading | `loading.tsx` |
+| Error | `error.tsx` (must be Client Component) |
+| Route handler | `route.ts` |
+| Route segment folder | kebab-case plural | `cases/`, `hearings/` |
+
+## Performance Rules
+
+- Static generation where data is public and stable
+- `revalidatePath` / `revalidateTag` after mutations
+- Use `Suspense` boundaries with skeleton fallbacks
+- Dynamic imports for heavy client components: `next/dynamic`
+- Image optimization via `next/image` always
+
+## Security Rules
+
+- Middleware auth check on all `(dashboard)` routes
+- Never pass secrets to Client Components
+- CSRF protection via Server Actions (built-in)
+- Validate route params before DB queries
+
+## Examples
+
+```tsx
+// ✅ GOOD — Async Server Component page
+// app/(dashboard)/cases/[caseId]/page.tsx
+import { CaseDetailView } from '@/features/cases/ui/case-detail-view';
+import { caseRepository } from '@/repositories/case.repository';
+import { notFound } from 'next/navigation';
+
+interface Props { params: Promise<{ caseId: string }> }
+
+export default async function CaseDetailPage({ params }: Props) {
+  const { caseId } = await params;
+  const caseData = await caseRepository.findById(caseId);
+  if (!caseData) notFound();
+  return <CaseDetailView case={caseData} />;
+}
+
+// ❌ BAD — fetch in Client Component when Server Component suffices
+'use client';
+export default function Page() {
+  const [data, setData] = useState(null);
+  useEffect(() => { fetch('/api/cases').then(...) }, []);
+}
+```
+
+## Things to Avoid
+
+- `getServerSideProps` / Pages Router patterns
+- API routes for CRUD that Server Actions handle
+- Passing large objects as props to Client Components
+- Missing loading states on async routes
+- Hardcoded URLs — use centralized route constants in `lib/routes.ts`
+
+## Checklist Before Finishing Any Task
+
+- [ ] Page is Server Component unless interactivity required
+- [ ] `loading.tsx` skeleton exists for data-heavy routes
+- [ ] Route params validated before use
+- [ ] Metadata set (title, description)
+- [ ] Mutations use Server Actions, not client fetch to API
+- [ ] Revalidation triggered after data changes

@@ -1,0 +1,102 @@
+---
+description: Documentation standards — README, architecture docs, inline comments, API docs
+globs: **/*.md,**/*.mdx
+alwaysApply: false
+---
+
+# Documentation Rules
+
+## Responsibilities
+
+- Maintain accurate, useful documentation for developers and stakeholders
+- Keep architecture, API, and database docs in sync with code
+- Write self-documenting code; comment only non-obvious logic
+
+## Best Practices
+
+- **README.md** — project overview, quick start, env setup
+- **Architecture.md** — system design, layers, data flow
+- **Database.md** — ERD, model descriptions, migration guide
+- **API.md** — Server Actions catalog, Route Handlers
+- **DevelopmentGuide.md** — local setup, milestones, workflows
+- **Inline comments** — why, not what; business rules and edge cases
+- **JSDoc** on exported functions, repositories, services
+- Update docs in same PR as code changes
+
+## Coding Standards
+
+```typescript
+/**
+ * Creates an invoice from billable time entries.
+ * Validates client ownership and calculates tax based on org settings.
+ * @throws InsufficientPermissionError if user lacks invoices:create
+ */
+export async function createInvoiceFromTimeEntries(input: CreateInvoiceInput) { ... }
+```
+
+- Markdown: ATX headers, fenced code blocks with language tags
+- Diagrams: Mermaid in markdown files
+- Keep docs DRY — link between files, don't duplicate
+
+## Folder Structure
+
+```
+/
+├── README.md
+├── Architecture.md
+├── Database.md
+├── API.md
+├── DevelopmentGuide.md
+├── FolderStructure.md
+├── CodingStandards.md
+├── Contributing.md
+└── docs/                    # Extended docs (optional)
+    └── adr/                 # Architecture Decision Records
+```
+
+## Naming Convention
+
+| Doc | Purpose |
+|-----|---------|
+| Architecture.md | System design |
+| Database.md | Schema and ERD |
+| API.md | Action/handler reference |
+| ADR-NNN-title.md | Decision records |
+
+## Performance Rules
+
+- N/A
+
+## Security Rules
+
+- Never document actual secrets or credentials
+- Document security model and permission matrix
+- Redact example data in docs
+
+## Examples
+
+```markdown
+<!-- ✅ GOOD ADR -->
+# ADR-001: Server Actions over REST API
+
+## Status: Accepted
+## Context: Internal CRM needs type-safe mutations...
+## Decision: Use Server Actions as primary mutation layer...
+## Consequences: Simpler auth, no separate API versioning...
+```
+
+## Things to Avoid
+
+- Outdated docs left unchanged after refactor
+- Over-commenting obvious code
+- Duplicating Prisma schema in Database.md (reference + explain, don't copy entire schema)
+- README with only default Next.js boilerplate
+
+## Checklist Before Finishing Any Task
+
+- [ ] README updated if setup/commands changed
+- [ ] Database.md updated if schema changed
+- [ ] API.md updated if new actions/endpoints added
+- [ ] JSDoc on new exported functions
+- [ ] Complex business logic has explanatory comment
+- [ ] Mermaid diagrams updated if architecture changed

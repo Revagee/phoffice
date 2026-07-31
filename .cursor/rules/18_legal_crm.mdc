@@ -1,0 +1,139 @@
+---
+description: Legal CRM domain rules — cases, clients, billing, compliance, legal workflows
+globs: src/features/**/*
+alwaysApply: false
+---
+
+# Legal CRM Domain Rules
+
+## Responsibilities
+
+- Encode legal practice management domain knowledge in software
+- Ensure workflows match how law firms operate
+- Protect ethical and compliance requirements in feature design
+
+## Domain Model Overview
+
+| Entity | Purpose |
+|--------|---------|
+| **Client** | Individual or organization receiving legal services |
+| **Case/Matter** | Legal matter linked to client; central hub for all related data |
+| **Hearing** | Court dates, depositions, mediations |
+| **Document** | Contracts, filings, evidence, correspondence |
+| **Task** | Deadlines, follow-ups, assignments |
+| **Invoice** | Billable work product; line items from time/expenses |
+| **Payment** | Client payments against invoices |
+| **Expense** | Case-related costs (filing fees, travel) |
+| **Note** | Internal case notes (privileged) |
+| **Activity** | Timeline of all actions on records |
+| **CalendarEvent** | Firm calendar including hearings and meetings |
+| **AuditLog** | Compliance trail for sensitive changes |
+
+## Best Practices
+
+- **Case-centric navigation** — everything accessible from case detail
+- **Conflict check** before new client/case creation (Phase 3)
+- **Statute of limitations** tracking with alerts (Phase 4)
+- **Time tracking** in 0.1 hour increments (6-minute billing)
+- **Trust accounting** separation (IOLTA) — Phase 5
+- **Document versioning** — never overwrite, always version
+- **Privilege markers** on notes and documents
+- **Activity feed** auto-generated from all CRUD operations
+
+## Legal Workflows
+
+```
+Intake → Conflict Check → Open Case → Assign Team
+  → Document Management → Task/Deadline Tracking
+  → Time Entry → Invoice → Payment → Close Case
+```
+
+## Coding Standards
+
+- Case numbers: auto-generated per org `{PREFIX}-{YEAR}-{SEQ}` (configurable)
+- Invoice numbers: sequential per org, never reused
+- Status transitions validated (can't close case with open invoices)
+- Hearing reminders: 24h and 1h before (configurable)
+- Document categories: enum aligned with legal practice (Pleading, Contract, Evidence, Correspondence, Filing)
+
+## Folder Structure
+
+```
+src/features/
+├── clients/
+├── cases/
+├── hearings/
+├── documents/
+├── tasks/
+├── billing/
+│   ├── invoices/
+│   ├── payments/
+│   └── expenses/
+├── calendar/
+├── notes/
+├── activities/
+├── notifications/
+└── settings/
+```
+
+## Naming Convention
+
+| Domain Term | Code Term | UI Label |
+|-------------|-----------|----------|
+| Matter | Case | Case / Matter (configurable) |
+| Client | Client | Client |
+| Hearing | Hearing | Hearing / Court Date |
+| Time Entry | TimeEntry | Time Entry (Phase 3) |
+
+## Performance Rules
+
+- Case detail page: load overview first, lazy-load tabs (documents, billing)
+- Activity feed: cursor pagination, 20 items per page
+- Global search: cases, clients, documents (Phase 2)
+
+## Security Rules
+
+- **Attorney-client privilege**: notes/documents restricted by role
+- **Ethical walls**: restrict case access by user assignment (Phase 3)
+- **Client portal**: separate auth, limited to own cases/invoices (Phase 4)
+- **Export controls**: audit all data exports
+- **Retention policies**: configurable per org (Phase 5)
+
+## Examples
+
+```typescript
+// ✅ GOOD — Validate case closure
+async closeCase(caseId: string, session: Session) {
+  const openInvoices = await invoiceRepository.countOpen(caseId);
+  if (openInvoices > 0) {
+    return { success: false, error: 'Cannot close case with unpaid invoices' };
+  }
+  return caseRepository.updateStatus(caseId, 'CLOSED', session.organizationId);
+}
+
+// ✅ GOOD — Auto activity on mutation
+await activityService.log({
+  entityType: 'CASE',
+  entityId: caseId,
+  action: 'STATUS_CHANGED',
+  metadata: { from: 'OPEN', to: 'CLOSED' },
+  userId: session.userId,
+});
+```
+
+## Things to Avoid
+
+- Deleting cases with legal hold
+- Mixing trust and operating account logic prematurely
+- Showing privileged notes to client portal users
+- Allowing invoice edits after payment received
+- Generic CRM terminology that confuses legal users
+
+## Checklist Before Finishing Any Task
+
+- [ ] Feature fits legal workflow (case-centric)
+- [ ] Status transitions validated
+- [ ] Activity logged for audit trail
+- [ ] Privilege/access rules respected
+- [ ] Legal terminology consistent in UI and code
+- [ ] Empty states guide user through legal workflow step
