@@ -3,6 +3,9 @@ import "./globals.css";
 import "./workspace.css";
 import "./auth.css";
 import "./interactions.css";
+import "./clients.css";
+import "./tasks.css";
+import "./cases.css";
 import { AuthProvider } from "@/providers/auth-provider";
 
 export const metadata: Metadata = {
